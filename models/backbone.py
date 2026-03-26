@@ -27,3 +27,6 @@ class BackBone(nn.Module):
         representation = self.encoder(x)
         projection = self.projector(representation)
         return projection
+
+    def save(self, path):
+        torch.save(self.state_dict(), path)

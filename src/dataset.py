@@ -26,7 +26,7 @@ def get_split_loaders(subset_train, subset_test, val_size, batch_size):
     
     return train_loader, val_loader, test_loader
 
-def get_task_data_loaders(tasks, train_dataset, test_dataset, val_size=0.1, batch_size=64):
+def get_task_data_loaders(tasks, train_dataset, test_dataset, val_size, batch_size):
     dataloaders = []
     for task_classes in tasks:
         train_subset = get_task_data(train_dataset, task_classes)
@@ -39,7 +39,7 @@ def get_task_data_loaders(tasks, train_dataset, test_dataset, val_size=0.1, batc
     return dataloaders
 
 
-def get_data_loaders():
+def get_data_loaders(val_size=0.1, batch_size=64):
     transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.4914, 0.4822, 0.4465), 
@@ -59,4 +59,4 @@ def get_data_loaders():
         [8, 9],   # ship, truck
     ]
 
-    return get_task_data_loaders(TASKS, train_dataset, test_dataset)
+    return get_task_data_loaders(TASKS, train_dataset, test_dataset, val_size, batch_size)
