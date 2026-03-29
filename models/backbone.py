@@ -11,6 +11,8 @@ from torchvision import models
 class BackBone(nn.Module):
     def __init__(self, proj_hidden=512, proj_out=128):
         super().__init__()
+
+        self.proj_out = proj_out
         
         self.encoder = models.resnet18(pretrained=False)
         self.encoder.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
