@@ -5,6 +5,10 @@ RandAugment:
 SupCon:
   tau=0.5
 
+Dataloading:
+  num_workers=4
+  pin_memory=True
+
 training:
   lr=1e-2
   tau=0.3
