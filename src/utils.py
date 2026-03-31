@@ -17,7 +17,16 @@ def deterministic(seed=42):
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = True
 
-def _to_local_labels(y, task_number, num_classes):
+def _to_local_labels(y, task_number, num_classes, global_labels=False):
+    if global_labels:
+        # CIL: las labels ya son globales, no hay offset
+        if y.min().item() < 0 or y.max().item() >= num_classes:
+            raise ValueError(
+                f"Labels out of range. Expected [0, {num_classes - 1}], "
+                f"got min={y.min().item()} max={y.max().item()}."
+            )
+        return y
+    # TIL: offset por task
     class_offset = task_number * num_classes
     y_local = y - class_offset
     if y_local.min().item() < 0 or y_local.max().item() >= num_classes:
@@ -28,9 +37,10 @@ def _to_local_labels(y, task_number, num_classes):
         )
     return y_local
 
-def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True):
+def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
     device = next(model.parameters()).device
-    writer = SummaryWriter(log_dir=f"../runs/{title}")
+    if title is not None:
+        writer = SummaryWriter(log_dir=f"../runs/{title}")
     epoch_bar = tqdm(range(epochs), desc = "Epochs", unit = "epoch")
 
     for epoch in epoch_bar:
@@ -40,9 +50,10 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
 
             optimizer.zero_grad()
             pred = model(x_all, task_number)
-            y_local = _to_local_labels(y_all, task_number, pred.size(1))
+            y_local = _to_local_labels(y_all, task_number, pred.size(1), global_labels)
             loss = criterion(pred, y_local)
-            writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
+            if title is not None:
+                writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
             # print(loss.item())
 
             loss.backward()
@@ -51,13 +62,14 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
             batch_bar.set_postfix({"loss": loss.item()})
         epoch_bar.set_postfix({"loss": loss.item()})
 
-
-    writer.close()
+    if title is not None:
+        writer.close()
     if save == True:
         model.save(f"../models/weights/{title}.pth")
 
 
 def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=5):
+    model.train()
     device = next(model.parameters()).device
     writer = SummaryWriter(log_dir=f"../runs/{title}")
 
@@ -97,7 +109,7 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
     writer.close()
     model.save(f"../models/weights/{title}.pth")
 
-def accuracy(model, val_data, task_number):
+def accuracy(model, val_data, task_number, global_labels=False):
     model.eval()
     device = next(model.parameters()).device
     with torch.no_grad():
@@ -107,8 +119,10 @@ def accuracy(model, val_data, task_number):
             x, y = x.to(device), y.to(device)
             pred = model(x, task_number)
 
-            y_local = _to_local_labels(y, task_number, pred.size(1))
+            y_local = _to_local_labels(y, task_number, pred.size(1), global_labels)
             _, predicted = torch.max(pred.data, 1)
             total += y_local.size(0)
             correct += (predicted == y_local).sum().item()
         return correct / total
+
+
