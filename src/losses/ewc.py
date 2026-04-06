@@ -37,7 +37,7 @@ class EWCCriterion:
 
         return loss
 
-    def consolidate(self, model, dataloader, task_number):
+    def update(self, model, dataloader, task_number):
         device = next(model.parameters()).device
         self.latest_parameters = {n: p for n, p in model.named_parameters() if p.requires_grad}
 
@@ -58,10 +58,7 @@ class EWCCriterion:
             loss.backward()
             for n, p in self.latest_parameters.items():
                 if p.grad is not None:
-                    print(f"{n}: grad_norm={p.grad.norm().item():.6f}")
                     fisher[n] += p.grad ** 2 / len(dataloader)
-                else:
-                    print(f"{n}: grad is None")
 
         self.fishers.append(fisher)
         self.thetas.append(theta_star)

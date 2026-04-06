@@ -6,6 +6,11 @@ from tqdm.auto import tqdm
 from torch.utils.tensorboard import SummaryWriter
 import os
 
+from backbone import BackBone
+from multiheadmodel import MultiHeadModel
+from dataset import get_data_loaders
+
+
 def deterministic(seed=42):
     random.seed(seed)
     np.random.seed(seed)
@@ -14,8 +19,8 @@ def deterministic(seed=42):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def _to_local_labels(y, task_number, num_classes, global_labels=False):
     if global_labels:
@@ -37,7 +42,15 @@ def _to_local_labels(y, task_number, num_classes, global_labels=False):
         )
     return y_local
 
+
+def _maybe_update_criterion(criterion, model, dataloader, task_number):
+    update_fn = getattr(criterion, "update", None)
+    if callable(update_fn):
+        update_fn(model=model, dataloader=dataloader, task_number=task_number)
+
 def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
+    #se puede unificar title con save, siempore que no escribimo la loss no guardamos el modelo
+    #global_labels is f
     device = next(model.parameters()).device
     if title is not None:
         writer = SummaryWriter(log_dir=f"../runs/{title}")
@@ -48,6 +61,9 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
         for i, (x, y) in enumerate(batch_bar):
             x_all, y_all = x.to(device), y.to(device) # ver randaugment
 
+            if hasattr(criterion, "x_cache"):
+                criterion.x_cache = x_all
+            
             optimizer.zero_grad()
             pred = model(x_all, task_number)
             y_local = _to_local_labels(y_all, task_number, pred.size(1), global_labels)
@@ -67,6 +83,65 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
     if save == True:
         model.save(f"../models/weights/{title}.pth")
 
+def new_model_from_backbone(device, path = "../models/weights/backbone.pth"):
+    backbone = BackBone()
+    backbone.load_state_dict(torch.load(path))
+    model = MultiHeadModel(backbone)
+    model.to(device)
+    return model
+
+def run_til_experiment(criterion, title, device, batch_size=512, epochs = 20, seed=42):
+    deterministic(seed)
+    model = new_model_from_backbone(device)
+    dataloaders = get_data_loaders(batch_size=batch_size)
+
+    for task in range(len(dataloaders)):
+        model.add_head(task)
+        model.to(device)
+        train_data = dataloaders[task][0]
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+
+        train(model, train_data, optimizer, criterion, None, epochs, task_number=task, save=False)
+        _maybe_update_criterion(criterion, model, dataloaders[task][0], task_number=task)
+        
+        # Accuracy después de cada entrenamiento
+        eval_data = dataloaders[task][1]
+        acc = accuracy(model, eval_data, task_number=task)
+        print(f"Task {task} Accuracy: {acc:.4f}")
+
+    # Accuracy después de terminar
+    for i in range(len(dataloaders)):
+        eval_data = dataloaders[i][1]
+        acc = accuracy(model, eval_data, task_number=i)
+        print(f"Task {i} Accuracy: {acc:.4f}")
+
+    model.save(f"../models/weights/{title}_TIL.pth")
+
+def run_cil_experiment(criterion, title, device, batch_size=512, epochs = 20, seed=42):
+    deterministic(seed)
+    model = new_model_from_backbone(device)
+    dataloaders = get_data_loaders(batch_size=batch_size)
+
+    for task in range(len(dataloaders)):
+        print(f"Training task {task}")
+        if task == 0:
+            model.add_head(task)
+        else:
+            model.expand_head()
+        model.to(device)
+        train_data = dataloaders[task][0]
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        epochs = 20
+
+        train(model, train_data, optimizer, criterion, None, epochs, task_number=0, save=False, global_labels=True)
+        _maybe_update_criterion(criterion, model, dataloaders[task][0], task_number=0)
+        
+        for trained_task in range(task + 1):
+            eval_data = dataloaders[trained_task][1]
+            acc = accuracy(model, eval_data, task_number=0, global_labels=True)
+            print(f"Task {trained_task} Accuracy: {acc:.4f}")
+
+    model.save(f"../models/weights/{title}_CIL.pth")
 
 def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=5):
     model.train()

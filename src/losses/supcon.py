@@ -29,4 +29,7 @@ class SupConLoss(torch.nn.Module):
         
         return loss.mean()
 
+    def update(self, model=None, dataloader=None, task_number=None): #seguro se saca!
+        pass # No hay nada que actualizar en SupConLoss, pero se define el método para compatibilidad con el loop de entrenamiento
+
         
