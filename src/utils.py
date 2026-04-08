@@ -131,7 +131,6 @@ def run_cil_experiment(criterion, title, device, batch_size=512, epochs = 20, se
         model.to(device)
         train_data = dataloaders[task][0]
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-        epochs = 20
 
         train(model, train_data, optimizer, criterion, None, epochs, task_number=0, save=False, global_labels=True)
         _maybe_update_criterion(criterion, model, dataloaders[task][0], task_number=0)
