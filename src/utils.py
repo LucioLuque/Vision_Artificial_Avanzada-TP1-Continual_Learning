@@ -43,10 +43,10 @@ def _to_local_labels(y, task_number, num_classes, global_labels=False):
     return y_local
 
 
-def _maybe_update_criterion(criterion, model, dataloader, task_number):
+def _maybe_update_criterion(criterion, dataloader, task_number):
     update_fn = getattr(criterion, "update", None)
     if callable(update_fn):
-        update_fn(model=model, dataloader=dataloader, task_number=task_number)
+        update_fn(dataloader=dataloader, task_number=task_number)
 
 def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
     #se puede unificar title con save, siempore que no escribimo la loss no guardamos el modelo
@@ -59,8 +59,7 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
     for epoch in epoch_bar:
         batch_bar = tqdm(dataloader, desc = f"Epoch {epoch+1}/{epochs}", leave=False, unit="batch")
         for i, (x, y) in enumerate(batch_bar):
-            x_all, y_all = x.to(device), y.to(device) # ver randaugment
-
+            x_all, y_all = x.to(device, non_blocking=True), y.to(device, non_blocking=True) # ver randaugment
             if hasattr(criterion, "x_cache"):
                 criterion.x_cache = x_all
             
@@ -70,7 +69,6 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
             loss = criterion(pred, y_local)
             if title is not None:
                 writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
-            # print(loss.item())
 
             loss.backward()
             optimizer.step()
@@ -90,9 +88,8 @@ def new_model_from_backbone(device, path = "../models/weights/backbone.pth"):
     model.to(device)
     return model
 
-def run_til_experiment(criterion, title, device, batch_size=512, epochs = 20, seed=42):
+def run_til_experiment(criterion, title, device, model, batch_size=512, epochs = 5, seed=42):
     deterministic(seed)
-    model = new_model_from_backbone(device)
     dataloaders = get_data_loaders(batch_size=batch_size)
 
     for task in range(len(dataloaders)):
@@ -102,7 +99,7 @@ def run_til_experiment(criterion, title, device, batch_size=512, epochs = 20, se
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
         train(model, train_data, optimizer, criterion, None, epochs, task_number=task, save=False)
-        _maybe_update_criterion(criterion, model, dataloaders[task][0], task_number=task)
+        _maybe_update_criterion(criterion, dataloaders[task][0], task_number=task)
         
         # Accuracy después de cada entrenamiento
         eval_data = dataloaders[task][1]
@@ -117,9 +114,8 @@ def run_til_experiment(criterion, title, device, batch_size=512, epochs = 20, se
 
     model.save(f"../models/weights/{title}_TIL.pth")
 
-def run_cil_experiment(criterion, title, device, batch_size=512, epochs = 20, seed=42):
+def run_cil_experiment(criterion, title, device, model, batch_size=512, epochs = 5, seed=42):
     deterministic(seed)
-    model = new_model_from_backbone(device)
     dataloaders = get_data_loaders(batch_size=batch_size)
 
     for task in range(len(dataloaders)):
@@ -133,7 +129,7 @@ def run_cil_experiment(criterion, title, device, batch_size=512, epochs = 20, se
         optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 
         train(model, train_data, optimizer, criterion, None, epochs, task_number=0, save=False, global_labels=True)
-        _maybe_update_criterion(criterion, model, dataloaders[task][0], task_number=0)
+        _maybe_update_criterion(criterion, dataloaders[task][0], task_number=0)
         
         for trained_task in range(task + 1):
             eval_data = dataloaders[trained_task][1]
@@ -151,7 +147,7 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
     for epoch in epoch_bar:
         batch_bar = tqdm(dataloader, desc = f"Epoch {epoch+1}/{epochs}", leave=False, unit="batch")
         for i, (x, y) in enumerate(batch_bar):
-            x_all, y_all = x.to(device), y.to(device) # ver randaugment
+            x_all, y_all = x.to(device, non_blocking=True), y.to(device, non_blocking=True) # ver randaugment
 
             optimizer.zero_grad()
             embeddings = model(x_all)
@@ -190,7 +186,7 @@ def accuracy(model, val_data, task_number, global_labels=False):
         correct = 0
         total = 0
         for x, y in tqdm(val_data, desc="Evaluating", unit="batch"):
-            x, y = x.to(device), y.to(device)
+            x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
             pred = model(x, task_number)
 
             y_local = _to_local_labels(y, task_number, pred.size(1), global_labels)
