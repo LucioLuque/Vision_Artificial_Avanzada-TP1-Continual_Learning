@@ -22,5 +22,5 @@ class ReplayBuffer:
     def get_dataloader(self, batch_size):
         xs, ys = zip(*self.buffer)
         dataset = TensorDataset(torch.stack(xs), torch.stack(ys))
-        return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+        return DataLoader(dataset, batch_size=batch_size, shuffle=True)
     
