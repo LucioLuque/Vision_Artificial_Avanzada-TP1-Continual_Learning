@@ -54,10 +54,10 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
     device = next(model.parameters()).device
     if title is not None:
         writer = SummaryWriter(log_dir=f"../runs/{title}")
-    epoch_bar = tqdm(range(epochs), desc = "Epochs", unit = "epoch")
+    epoch_bar = tqdm(range(epochs), desc = "Epochs", unit = "epoch", miniters=50)
 
     for epoch in epoch_bar:
-        batch_bar = tqdm(dataloader, desc = f"Epoch {epoch+1}/{epochs}", leave=False, unit="batch")
+        batch_bar = tqdm(dataloader, desc = f"Epoch {epoch+1}/{epochs}", leave=False, unit="batch", disable=True)
         for i, (x, y) in enumerate(batch_bar):
             x_all, y_all = x.to(device, non_blocking=True), y.to(device, non_blocking=True) # ver randaugment
             if hasattr(criterion, "x_cache"):
@@ -81,9 +81,13 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
     if save == True:
         model.save(f"../models/weights/{title}.pth")
 
-def new_model_from_backbone(device, path = "../models/weights/backbone.pth"):
+def new_model_from_backbone(device, path = "../models/weights/backbone.pth", freezed=False):
     backbone = BackBone()
     backbone.load_state_dict(torch.load(path))
+    if freezed:
+        for param in backbone.parameters():
+            param.requires_grad = False
+        backbone.eval()
     model = MultiHeadModel(backbone)
     model.to(device)
     return model
@@ -143,9 +147,9 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
     device = next(model.parameters()).device
     writer = SummaryWriter(log_dir=f"../runs/{title}")
 
-    epoch_bar = tqdm(range(epochs), desc = "Epochs", unit = "epoch")
+    epoch_bar = tqdm(range(epochs), desc = "Epochs", unit = "epoch", miniters=50)
     for epoch in epoch_bar:
-        batch_bar = tqdm(dataloader, desc = f"Epoch {epoch+1}/{epochs}", leave=False, unit="batch")
+        batch_bar = tqdm(dataloader, desc = f"Epoch {epoch+1}/{epochs}", leave=False, unit="batch", disable=True)
         for i, (x, y) in enumerate(batch_bar):
             x_all, y_all = x.to(device, non_blocking=True), y.to(device, non_blocking=True) # ver randaugment
 
@@ -193,6 +197,7 @@ def accuracy(model, val_data, task_number, global_labels=False):
             _, predicted = torch.max(pred.data, 1)
             total += y_local.size(0)
             correct += (predicted == y_local).sum().item()
+        model.train()  # volver a modo entrenamiento
         return correct / total
 
 
