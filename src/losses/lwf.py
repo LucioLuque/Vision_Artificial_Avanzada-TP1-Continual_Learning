@@ -12,6 +12,19 @@ class LwFCriterion:
         self.teacher = None
         self.x_cache = None
 
+    def _is_feature_batch(self, x):
+        return (
+            x is not None
+            and torch.is_tensor(x)
+            and x.ndim == 2
+            and x.size(1) == self.student.num_features
+        )
+
+    def _forward_logits(self, model, x, task_number):
+        if self._is_feature_batch(x):
+            return model.heads[str(task_number)](x)
+        return model(x, task_number)
+
     def update(self, dataloader=None, task_number=None):
         #solo para pder generalizar con ewc, pero no se usa model, dataloader ni task_number
         self.teacher = copy.deepcopy(self.student) # Teacher es el modelo anterior que se usa de referencia
@@ -29,15 +42,15 @@ class LwFCriterion:
         kd_loss = 0.0
         if is_cil:
             with torch.no_grad():
-                teacher_logits = self.teacher(self.x_cache, 0)
+                teacher_logits = self._forward_logits(self.teacher, self.x_cache, 0)
             student_logits = pred[:, :teacher_logits.size(1)]  # old class columns
 
             kd_loss += self._calc_kl(student_logits, teacher_logits)
         else:
             for old_task_id in range(len(self.teacher.heads)):
                 with torch.no_grad():
-                    teacher_logits = self.teacher(self.x_cache, old_task_id)
-                student_logits = self.student(self.x_cache, old_task_id)
+                    teacher_logits = self._forward_logits(self.teacher, self.x_cache, old_task_id)
+                student_logits = self._forward_logits(self.student, self.x_cache, old_task_id)
 
                 kd_loss += self._calc_kl(student_logits, teacher_logits)
 

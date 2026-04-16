@@ -75,7 +75,7 @@ def get_task_data_loaders(tasks, train_dataset, test_dataset, val_size, batch_si
         print(f"Task {task_classes}: Train={len(train_l.dataset)}, Val={len(val_l.dataset)}, Test={len(test_l.dataset)}")
     return dataloaders
 
-def get_data_loaders(val_size=0.1, batch_size=64, num_workers=None, pin_memory=None, persistent_workers=None):
+def get_data_loaders(val_size=0.1, batch_size=64, num_workers=0, pin_memory=None, persistent_workers=None):
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465),
