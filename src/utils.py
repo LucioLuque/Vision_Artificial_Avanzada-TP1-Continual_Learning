@@ -189,7 +189,8 @@ def accuracy(model, val_data, task_number, global_labels=False):
     with torch.no_grad():
         correct = 0
         total = 0
-        for x, y in tqdm(val_data, desc="Evaluating", unit="batch"):
+        # for x, y in tqdm(val_data, desc="Evaluating", unit="batch"):
+        for x, y in val_data:
             x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
             pred = model(x, task_number)
 

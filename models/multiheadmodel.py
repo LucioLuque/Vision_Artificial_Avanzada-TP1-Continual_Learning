@@ -6,7 +6,7 @@ class MultiHeadModel(nn.Module):
         super().__init__()
         self.backbone = backbone
         self.heads = nn.ModuleDict()
-        self.num_features = backbone.encoder.fc.in_features
+        self.num_features = backbone.projector[0].in_features
 
     def add_head(self, number: int, num_classes: int=2):
         self.heads[str(number)] = nn.Linear(self.num_features, num_classes)
