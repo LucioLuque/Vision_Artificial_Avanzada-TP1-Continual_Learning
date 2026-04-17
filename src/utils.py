@@ -59,7 +59,7 @@ def _freeze_backbone(model):
     model.backbone.eval()
 
 
-def _extract_features_from_loader(backbone, loader, device):
+def extract_features_from_loader(backbone, loader, device):
     feat_chunks, y_chunks = [], []
     backbone.eval()
     with torch.no_grad():
@@ -125,20 +125,31 @@ def _prepare_task_mode(model, mode, task):
     if mode == "til":
         model.add_head(task)
         train_task_number = task
-        eval_task_number = task
-        eval_global_labels = False
     elif mode == "cil":
         if task == 0:
             model.add_head(task)
         else:
             model.expand_head()
         train_task_number = 0
-        eval_task_number = 0
-        eval_global_labels = True
     else:
         raise ValueError(f"Unsupported mode '{mode}'. Expected 'til' or 'cil'.")
 
-    return train_task_number, eval_task_number, eval_global_labels
+    return train_task_number
+
+
+def avg_accuracy_on_all_tasks(model, dataloaders, task_number, cil=False, test=False):
+    data_idx = 2 if test else 1
+    accs = []
+
+    for i in range(task_number + 1):
+        eval_data = dataloaders[i][data_idx]
+        eval_task_number = 0 if cil else i
+        acc = accuracy(model, eval_data, task_number=eval_task_number, global_labels=cil)
+        accs.append(acc)
+        print(f"|{i}: {acc:.4f}|", end="")
+
+    avg_acc = sum(accs) / len(accs)
+    print(f"\nAvg accuracy: {avg_acc:.4f}")
 
 
 def _run_feature_experiment(
@@ -160,11 +171,11 @@ def _run_feature_experiment(
 
     for task in range(len(dataloaders)):
         print(f"Training task {task}")
-        train_task_number, eval_task_number, eval_global_labels = _prepare_task_mode(model, mode=mode, task=task)
+        train_task_number = _prepare_task_mode(model, mode=mode, task=task)
         model.to(device)
         train_data = dataloaders[task][0]
 
-        feat_train_cpu, y_train_global_cpu = _extract_features_from_loader(
+        feat_train_cpu, y_train_global_cpu = extract_features_from_loader(
             backbone=model.backbone,
             loader=train_data,
             device=device,
@@ -191,15 +202,9 @@ def _run_feature_experiment(
 
         _maybe_update_criterion(criterion, dataloaders[task][0], task_number=train_task_number)
 
-        accs = []
-        for i in range(task + 1):
-            eval_data = dataloaders[i][1]
-            eval_task_number_i = i if mode == "til" else eval_task_number
-            acc = accuracy(model, eval_data, task_number=eval_task_number_i, global_labels=eval_global_labels)
-            print(f"|{i}: {acc:.4f}|", end="")
-            accs.append(acc)
+        avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"))
 
-        print(f"\nAvg accuracy after training task {task}: {sum(accs) / len(accs):.4f}")
+    avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"), test=True)
 
     model.save(f"../models/weights/{title}_{mode.upper()}.pth")
 
