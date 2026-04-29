@@ -169,8 +169,8 @@ def _run_feature_experiment(
     device = next(model.parameters()).device
 
     dataloaders = get_data_loaders(batch_size=batch_size, num_workers=num_workers)
-    all_accs_train = []
-    avg_acc_train = 0.0
+    all_val_accs = []
+    avg_val_acc = 0.0
     for task in range(len(dataloaders)):
         print(f"Training task {task}")
         train_task_number = _prepare_task_mode(model, mode=mode, task=task)
@@ -205,14 +205,14 @@ def _run_feature_experiment(
         _maybe_update_criterion(criterion, dataloaders[task][0], task_number=train_task_number)
 
         accs = avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"))
-        all_accs_train.append(accs)
-    avg_acc_train = sum(all_accs_train[-1]) / len(all_accs_train[-1])
+        all_val_accs.append(accs)
+    avg_val_acc = sum(all_val_accs[-1]) / len(all_val_accs[-1])
 
     accs = avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"), test=True)
     avg_test_acc = sum(accs) / len(accs)
 
     model.save(f"../models/weights/{title}_{mode.upper()}.pth")
-    return all_accs_train, avg_acc_train, avg_test_acc
+    return all_val_accs, avg_val_acc, avg_test_acc
 
 
 def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
@@ -251,7 +251,7 @@ def new_model_from_backbone(device, path="../models/weights/backbone.pth"):
 
 
 def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
-    all_accs_training, avg_acc_train, avg_test_acc = _run_feature_experiment(
+    all_val_accs, avg_val_acc, avg_test_acc = _run_feature_experiment(
         model=model,
         criterion=criterion,
         title=title,
@@ -262,11 +262,11 @@ def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=
         lr=lr,
         num_workers=num_workers,
     )
-    return all_accs_training, avg_acc_train, avg_test_acc
+    return all_val_accs, avg_val_acc, avg_test_acc
 
 
 def run_cil_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
-    all_accs_training, avg_acc_train, avg_test_acc = _run_feature_experiment(
+    all_val_accs, avg_val_acc, avg_test_acc = _run_feature_experiment(
         model=model,
         criterion=criterion,
         title=title,
@@ -277,7 +277,7 @@ def run_cil_experiment(model, criterion, title, batch_size=512, epochs=20, seed=
         lr=lr,
         num_workers=num_workers,
     )
-    return all_accs_training, avg_acc_train, avg_test_acc
+    return all_val_accs, avg_val_acc, avg_test_acc
 
 def save_tsne_embeddings(tsne, embeddings, y_all, epoch):
     emb_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
