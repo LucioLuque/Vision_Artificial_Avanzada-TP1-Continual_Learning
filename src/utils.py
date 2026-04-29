@@ -150,6 +150,7 @@ def avg_accuracy_on_all_tasks(model, dataloaders, task_number, cil=False, test=F
 
     avg_acc = sum(accs) / len(accs)
     print(f"\nAvg accuracy: {avg_acc:.4f}")
+    return accs
 
 
 def _run_feature_experiment(
@@ -168,7 +169,8 @@ def _run_feature_experiment(
     device = next(model.parameters()).device
 
     dataloaders = get_data_loaders(batch_size=batch_size, num_workers=num_workers)
-
+    all_accs_train = []
+    avg_acc_train = 0.0
     for task in range(len(dataloaders)):
         print(f"Training task {task}")
         train_task_number = _prepare_task_mode(model, mode=mode, task=task)
@@ -202,18 +204,22 @@ def _run_feature_experiment(
 
         _maybe_update_criterion(criterion, dataloaders[task][0], task_number=train_task_number)
 
-        avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"))
+        accs = avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"))
+        all_accs_train.append(accs)
+    avg_acc_train = sum(all_accs_train[-1]) / len(all_accs_train[-1])
 
-    avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"), test=True)
+    accs = avg_accuracy_on_all_tasks(model, dataloaders, task, cil=(mode == "cil"), test=True)
+    avg_test_acc = sum(accs) / len(accs)
 
     model.save(f"../models/weights/{title}_{mode.upper()}.pth")
+    return all_accs_train, avg_acc_train, accs, avg_test_acc
 
 
 def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
     device = next(model.parameters()).device
 
-    if title is not None:
-        writer = SummaryWriter(log_dir=f"../runs/{title}")
+    # if title is not None:
+    #     writer = SummaryWriter(log_dir=f"../runs/{title}")
 
     epoch_bar = tqdm(range(epochs), desc="Epochs", unit="epoch", miniters=50)
 
@@ -229,8 +235,8 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
             y_local = _to_local_labels(y_all, task_number, pred.size(1), global_labels)
             loss = criterion(pred, y_local)
 
-            if title is not None:
-                writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
+            # if title is not None:
+            #     writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
 
             loss.backward()
             optimizer.step()
@@ -239,8 +245,8 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
 
         epoch_bar.set_postfix({"loss": loss.item()})
 
-    if title is not None:
-        writer.close()
+    # if title is not None:
+    #     writer.close()
 
     if save:
         model.save(f"../models/weights/{title}.pth")
@@ -255,7 +261,7 @@ def new_model_from_backbone(device, path="../models/weights/backbone.pth"):
 
 
 def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
-    _run_feature_experiment(
+    all_accs_training, avg_acc_train, accs, avg_test_acc = _run_feature_experiment(
         model=model,
         criterion=criterion,
         title=title,
@@ -266,10 +272,11 @@ def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=
         lr=lr,
         num_workers=num_workers,
     )
+    return all_accs_training, avg_acc_train, accs, avg_test_acc
 
 
 def run_cil_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
-    _run_feature_experiment(
+    all_accs_training, avg_acc_train, accs, avg_test_acc = _run_feature_experiment(
         model=model,
         criterion=criterion,
         title=title,
@@ -280,11 +287,20 @@ def run_cil_experiment(model, criterion, title, batch_size=512, epochs=20, seed=
         lr=lr,
         num_workers=num_workers,
     )
+    return all_accs_training, avg_acc_train, accs, avg_test_acc
+
+def save_tsne_embeddings(tsne, embeddings, y_all, epoch):
+    emb_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
+    labels = y_all.detach().cpu().numpy()
+    binary_labels = (labels == labels[0]).astype(int)
+    return emb_2d, binary_labels
 
 def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=5):
     model.train()
     device = next(model.parameters()).device
-    writer = SummaryWriter(log_dir=f"../runs/{title}")
+    # writer = SummaryWriter(log_dir=f"../runs/{title}")
+    history = {"loss": []}
+    emb_labels = []
 
     epoch_bar = tqdm(range(epochs), desc="Epochs", unit="epoch", miniters=50)
     for epoch in epoch_bar:
@@ -296,21 +312,12 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
             embeddings = model(x_all)
             loss = criterion(embeddings, y_all)
 
+            history["loss"].append(loss.item())
+
             if (epoch == 0 or epoch == epochs // 2 or epoch == epochs - 1) and i == 0:
-                emb_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
-                labels = y_all.detach().cpu().numpy()
-                binary_labels = (labels == labels[0]).astype(int)
-
-                plt.figure(figsize=(8, 6))
-                scatter = plt.scatter(emb_2d[:, 0], emb_2d[:, 1], c=binary_labels, cmap='bwr', vmin=0, vmax=1)
-                plt.colorbar(scatter, ticks=[0, 1], label='Class')
-                plt.title(f"Epoch {epoch}")
-                os.makedirs("../images", exist_ok=True)
-                plt.savefig(f"../images/tsne_epoch_{epoch}.png", dpi=150, facecolor='white')
-                plt.show()
-                plt.close()
-
-            writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
+                emb_2d, labels = save_tsne_embeddings(tsne, embeddings, y_all, epoch)
+                emb_labels.append([emb_2d, labels])
+            # writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
 
             loss.backward()
             optimizer.step()
@@ -318,8 +325,9 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
             batch_bar.set_postfix({"loss": loss.item()})
         epoch_bar.set_postfix({"loss": loss.item()})
 
-    writer.close()
+    # writer.close()
     model.save(f"../models/weights/{title}.pth")
+    return history, emb_labels
 
 def accuracy(model, val_data, task_number, global_labels=False):
     model.eval()
