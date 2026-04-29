@@ -217,10 +217,6 @@ def _run_feature_experiment(
 
 def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
     device = next(model.parameters()).device
-
-    # if title is not None:
-    #     writer = SummaryWriter(log_dir=f"../runs/{title}")
-
     epoch_bar = tqdm(range(epochs), desc="Epochs", unit="epoch", miniters=50)
 
     for epoch in epoch_bar:
@@ -235,18 +231,12 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
             y_local = _to_local_labels(y_all, task_number, pred.size(1), global_labels)
             loss = criterion(pred, y_local)
 
-            # if title is not None:
-            #     writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
-
             loss.backward()
             optimizer.step()
 
             batch_bar.set_postfix({"loss": loss.item()})
 
         epoch_bar.set_postfix({"loss": loss.item()})
-
-    # if title is not None:
-    #     writer.close()
 
     if save:
         model.save(f"../models/weights/{title}.pth")
@@ -298,7 +288,6 @@ def save_tsne_embeddings(tsne, embeddings, y_all, epoch):
 def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=5):
     model.train()
     device = next(model.parameters()).device
-    # writer = SummaryWriter(log_dir=f"../runs/{title}")
     history = {"loss": []}
     emb_labels = []
 
@@ -316,7 +305,6 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
             if (epoch == 0 or epoch == epochs // 2 or epoch == epochs - 1) and i == 0:
                 emb_2d, labels = save_tsne_embeddings(tsne, embeddings, y_all, epoch)
                 emb_labels.append([emb_2d, labels])
-            # writer.add_scalar("Loss/Train", loss.item(), epoch * len(dataloader) + i)
 
             loss.backward()
             optimizer.step()
@@ -327,7 +315,6 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
         history["loss"].append(avg_loss)
         epoch_bar.set_postfix({"loss": avg_loss})
 
-    # writer.close()
     model.save(f"../models/weights/{title}.pth")
     return history, emb_labels
 
@@ -337,7 +324,6 @@ def accuracy(model, val_data, task_number, global_labels=False):
     with torch.no_grad():
         correct = 0
         total = 0
-        # for x, y in tqdm(val_data, desc="Evaluating", unit="batch"):
         for x, y in val_data:
             x, y = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
             pred = model(x, task_number)

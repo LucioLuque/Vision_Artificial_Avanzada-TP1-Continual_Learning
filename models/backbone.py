@@ -1,9 +1,3 @@
-#For Seq-CIFAR-10 and Tiny-ImageNet datasets, we use
-#ResNet-18 (not pretrained) as a base encoder for representation
-# learning followed by a 2-layer projection MLP which
-#maps representations to a 128-dimensional latent space [44].
-#The hidden layer of projection MLP consists of 512 hidden
-#units.
 import torch
 import torch.nn as nn
 from torchvision import models
