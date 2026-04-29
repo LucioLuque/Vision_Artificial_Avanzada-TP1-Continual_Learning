@@ -212,7 +212,7 @@ def _run_feature_experiment(
     avg_test_acc = sum(accs) / len(accs)
 
     model.save(f"../models/weights/{title}_{mode.upper()}.pth")
-    return all_accs_train, avg_acc_train, accs, avg_test_acc
+    return all_accs_train, avg_acc_train, avg_test_acc
 
 
 def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
@@ -261,7 +261,7 @@ def new_model_from_backbone(device, path="../models/weights/backbone.pth"):
 
 
 def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
-    all_accs_training, avg_acc_train, accs, avg_test_acc = _run_feature_experiment(
+    all_accs_training, avg_acc_train, avg_test_acc = _run_feature_experiment(
         model=model,
         criterion=criterion,
         title=title,
@@ -272,11 +272,11 @@ def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=
         lr=lr,
         num_workers=num_workers,
     )
-    return all_accs_training, avg_acc_train, accs, avg_test_acc
+    return all_accs_training, avg_acc_train, avg_test_acc
 
 
 def run_cil_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
-    all_accs_training, avg_acc_train, accs, avg_test_acc = _run_feature_experiment(
+    all_accs_training, avg_acc_train, avg_test_acc = _run_feature_experiment(
         model=model,
         criterion=criterion,
         title=title,
@@ -287,7 +287,7 @@ def run_cil_experiment(model, criterion, title, batch_size=512, epochs=20, seed=
         lr=lr,
         num_workers=num_workers,
     )
-    return all_accs_training, avg_acc_train, accs, avg_test_acc
+    return all_accs_training, avg_acc_train, avg_test_acc
 
 def save_tsne_embeddings(tsne, embeddings, y_all, epoch):
     emb_2d = tsne.fit_transform(embeddings.detach().cpu().numpy())
@@ -305,14 +305,13 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
     epoch_bar = tqdm(range(epochs), desc="Epochs", unit="epoch", miniters=50)
     for epoch in epoch_bar:
         batch_bar = tqdm(dataloader, desc=f"Epoch {epoch + 1}/{epochs}", leave=False, unit="batch", disable=True)
+        losses = []
         for i, (x, y) in enumerate(batch_bar):
             x_all, y_all = x.to(device, non_blocking=True), y.to(device, non_blocking=True)
 
             optimizer.zero_grad()
             embeddings = model(x_all)
             loss = criterion(embeddings, y_all)
-
-            history["loss"].append(loss.item())
 
             if (epoch == 0 or epoch == epochs // 2 or epoch == epochs - 1) and i == 0:
                 emb_2d, labels = save_tsne_embeddings(tsne, embeddings, y_all, epoch)
@@ -323,7 +322,10 @@ def backbone_train(model, dataloader, optimizer, criterion, title, tsne, epochs=
             optimizer.step()
 
             batch_bar.set_postfix({"loss": loss.item()})
-        epoch_bar.set_postfix({"loss": loss.item()})
+            losses.append(loss.item())
+        avg_loss = sum(losses) / len(losses)
+        history["loss"].append(avg_loss)
+        epoch_bar.set_postfix({"loss": avg_loss})
 
     # writer.close()
     model.save(f"../models/weights/{title}.pth")
