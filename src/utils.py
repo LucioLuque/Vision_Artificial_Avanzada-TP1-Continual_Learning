@@ -3,9 +3,7 @@ import os
 
 import numpy as np
 import torch
-import matplotlib.pyplot as plt
 from tqdm import tqdm
-from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, TensorDataset
 
 from backbone import BackBone
