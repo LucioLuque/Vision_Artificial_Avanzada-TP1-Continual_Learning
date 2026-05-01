@@ -1,6 +1,4 @@
 import random
-import os
-
 import numpy as np
 import torch
 from tqdm import tqdm
@@ -9,7 +7,6 @@ from torch.utils.data import DataLoader, TensorDataset
 from backbone import BackBone
 from multiheadmodel import MultiHeadModel
 from dataset import get_data_loaders
-
 
 def deterministic(seed=42):
     random.seed(seed)
@@ -22,7 +19,6 @@ def deterministic(seed=42):
 
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-
 
 def _to_local_labels(y, task_number, num_classes, global_labels=False):
     if global_labels:
@@ -44,18 +40,15 @@ def _to_local_labels(y, task_number, num_classes, global_labels=False):
         )
     return y_local
 
-
 def _maybe_update_criterion(criterion, dataloader, task_number):
     update_fn = getattr(criterion, "update", None)
     if callable(update_fn):
         update_fn(dataloader=dataloader, task_number=task_number)
 
-
 def _freeze_backbone(model):
     for parameter in model.backbone.parameters():
         parameter.requires_grad = False
     model.backbone.eval()
-
 
 def extract_features_from_loader(backbone, loader, device):
     feat_chunks, y_chunks = [], []
@@ -72,7 +65,6 @@ def extract_features_from_loader(backbone, loader, device):
 
     return torch.cat(feat_chunks, dim=0), torch.cat(y_chunks, dim=0)
 
-
 def _build_feature_loader(feat_cpu, y_cpu, batch_size, num_workers):
     return DataLoader(
         TensorDataset(feat_cpu, y_cpu),
@@ -80,7 +72,6 @@ def _build_feature_loader(feat_cpu, y_cpu, batch_size, num_workers):
         shuffle=True,
         num_workers=num_workers,
     )
-
 
 def _train_on_features(
     model,
@@ -118,7 +109,6 @@ def _train_on_features(
 
         epoch_bar.set_postfix({"loss": float(loss.item())})
 
-
 def _prepare_task_mode(model, mode, task):
     if mode == "til":
         model.add_head(task)
@@ -133,7 +123,6 @@ def _prepare_task_mode(model, mode, task):
         raise ValueError(f"Unsupported mode '{mode}'. Expected 'til' or 'cil'.")
 
     return train_task_number
-
 
 def avg_accuracy_on_all_tasks(model, dataloaders, task_number, cil=False, test=False):
     data_idx = 2 if test else 1
@@ -212,7 +201,6 @@ def _run_feature_experiment(
     model.save(f"../models/weights/{title}_{mode.upper()}.pth")
     return all_val_accs, avg_val_acc, avg_test_acc
 
-
 def train(model, dataloader, optimizer, criterion, title, epochs, task_number, save=True, global_labels=False):
     device = next(model.parameters()).device
     epoch_bar = tqdm(range(epochs), desc="Epochs", unit="epoch", miniters=50)
@@ -239,14 +227,12 @@ def train(model, dataloader, optimizer, criterion, title, epochs, task_number, s
     if save:
         model.save(f"../models/weights/{title}.pth")
 
-
 def new_model_from_backbone(device, path="../models/weights/backbone.pth"):
     backbone = BackBone()
     backbone.load_state_dict(torch.load(path, weights_only=True))
     model = MultiHeadModel(backbone)
     model.to(device)
     return model
-
 
 def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
     all_val_accs, avg_val_acc, avg_test_acc = _run_feature_experiment(
@@ -261,7 +247,6 @@ def run_til_experiment(model, criterion, title, batch_size=512, epochs=20, seed=
         num_workers=num_workers,
     )
     return all_val_accs, avg_val_acc, avg_test_acc
-
 
 def run_cil_experiment(model, criterion, title, batch_size=512, epochs=20, seed=42, lr=1e-4, num_workers=0):
     all_val_accs, avg_val_acc, avg_test_acc = _run_feature_experiment(
@@ -333,5 +318,3 @@ def accuracy(model, val_data, task_number, global_labels=False):
 
         model.train()
         return correct / total
-
-

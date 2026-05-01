@@ -9,7 +9,7 @@ class BackBone(nn.Module):
 
         self.proj_hidden = proj_hidden
         
-        self.encoder = models.resnet18(weights=None) # No pretrained
+        self.encoder = models.resnet18(weights=None)
         self.encoder.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.encoder.maxpool = nn.Identity()
         self.encoder.fc = nn.Identity()

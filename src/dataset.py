@@ -33,7 +33,7 @@ def _resolve_loader_runtime(num_workers=None, pin_memory=None, persistent_worker
 
 def get_split_loaders(subset_train, subset_test, val_size, batch_size, num_workers=None, pin_memory=None, persistent_workers=None):
     n = len(subset_train)
-    indices = np.random.permutation(n)  # cleaner than shuffle in-place
+    indices = np.random.permutation(n)
     split = int(np.floor(val_size * n))
 
     num_workers, pin_memory, persistent_workers = _resolve_loader_runtime(

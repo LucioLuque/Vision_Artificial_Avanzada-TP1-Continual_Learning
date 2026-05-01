@@ -65,7 +65,7 @@ class EWCCriterion:
 
 def _to_local_labels(y, task_number, num_classes, global_labels=False):
     if global_labels:
-        # CIL: las labels ya son globales, no hay offset
+        # CIL, las labels ya son globales, no hay offset
         if y.min().item() < 0 or y.max().item() >= num_classes:
             raise ValueError(
                 f"Labels out of range. Expected [0, {num_classes - 1}], "
